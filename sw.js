@@ -56,6 +56,11 @@ self.addEventListener("fetch", event => {
     return;
   }
 
+  // Only handle same-origin GET requests (skip non-GET and cross-origin fetches)
+  if (event.request.method !== "GET" || url.origin !== location.origin) {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then(cachedResponse => {
       if (cachedResponse) {
@@ -72,6 +77,13 @@ self.addEventListener("fetch", event => {
         });
 
         return networkResponse;
+      }).catch(() => {
+        // Offline fallback: navigations get the cached app shell, other uncached
+        // requests get a clear 503 instead of an unhandled network error.
+        if (event.request.mode === "navigate") {
+          return caches.match("./index.html").then(r => r || new Response("Offline", { status: 503, statusText: "Service Unavailable" }));
+        }
+        return new Response("Offline", { status: 503, statusText: "Service Unavailable" });
       });
     })
   );

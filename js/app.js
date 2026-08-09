@@ -13,6 +13,7 @@
   let chapterFilter = "all";
   let openChapterId = null;
   let onboardingDraft = { name: "", grade: 10, datesheet: {}, examSyllabus: null };
+  let wasOnboardingScreen = false;
 
   function getAppContainer() {
     return document.getElementById("app");
@@ -117,6 +118,7 @@
       } else {
         document.documentElement.classList.remove("dark");
       }
+      syncThemeColorMeta();
     } catch (err) {
       console.warn("initTheme error guarded:", err);
     }
@@ -130,9 +132,25 @@
       } catch (e) {
         console.warn("localStorage theme write blocked");
       }
+      syncThemeColorMeta();
     } catch (err) {
       console.warn("toggleTheme error guarded:", err);
     }
+  }
+
+  function syncThemeColorMeta() {
+    try {
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) {
+        meta.setAttribute("content", document.documentElement.classList.contains("dark") ? "#0f172a" : "#f8fafc");
+      }
+    } catch (e) {
+      // non-critical cosmetic update
+    }
+  }
+
+  function resetOnboardingDraft() {
+    onboardingDraft = { name: "", grade: 10, datesheet: {}, examSyllabus: null };
   }
 
   function getSubjectsData() {
@@ -154,6 +172,13 @@
     if (activeProfile && activeProfile.grade === 9 && currentScreen === "resources") {
       currentScreen = "dashboard";
     }
+
+    // Entering onboarding fresh? Start with a clean draft. Re-renders that happen
+    // while already on onboarding (e.g. theme toggle) must preserve in-progress input.
+    if (currentScreen === "onboarding" && !wasOnboardingScreen) {
+      resetOnboardingDraft();
+    }
+    wasOnboardingScreen = currentScreen === "onboarding";
 
     let html = "";
     html += renderHeader(activeProfile);
@@ -270,7 +295,7 @@
   }
 
   function renderModalContainer() {
-    return `<div id="modalOverlay" class="modal-overlay"></div>`;
+    return `<div id="modalOverlay" class="modal-overlay" role="dialog" aria-modal="true"></div>`;
   }
 
   function renderDashboardScreen(profile) {
@@ -343,7 +368,7 @@
       const strokeDashoffset = circumference - (pace.completionPercentage / 100) * circumference;
 
       html += `
-        <div class="subject-card" data-status="${pace.statusColor}" data-action="open-subject" data-subject-id="${pace.subjectId}">
+        <div class="subject-card" role="button" tabindex="0" data-status="${pace.statusColor}" data-action="open-subject" data-subject-id="${pace.subjectId}">
           <div class="subject-card-header">
             <span class="subject-name">${escapeHtml(pace.subjectName)}</span>
             <span class="status-tag ${pace.statusColor}">${escapeHtml(pace.statusLabel)}</span>
@@ -400,7 +425,7 @@
                   <span class="focus-item-ch">Ch ${item.chapterNo}: ${escapeHtml(item.chapterName)}</span>
                   <span class="focus-item-stage">${escapeHtml(window.getStageLabel(item.subjectId, item.stageKey))}</span>
                 </div>
-                <button type="button" class="stage-dot" data-state="${item.currentState}" title="Tap to update stage state"></button>
+                <button type="button" class="stage-dot" data-state="${item.currentState}" title="Tap to update stage state" aria-label="Update ${escapeHtml(window.getStageLabel(item.subjectId, item.stageKey))} stage"></button>
               </div>
             `).join("")}
           </div>
@@ -413,6 +438,10 @@
 
   function renderSubjectScreen(profile) {
     const subjectsData = getSubjectsData();
+    if (!subjectsData || subjectsData.length === 0) {
+      return `<div class="card"><h2>No chapter data available</h2><p style="margin:0; color:var(--text-secondary);">The chapter data files could not be loaded. Reload the page or reinstall the app.</p></div>`;
+    }
+
     if (!activeSubjectId) {
       activeSubjectId = subjectsData[0].id;
     }
@@ -472,15 +501,7 @@
           const key = `${currentSubData.id}.${ch.id}`;
           const chProgress = profile.progress ? profile.progress[key] || {} : {};
 
-          let isCompleted = true;
-          let isIncomplete = false;
-          stageKeys.forEach(sk => {
-            const st = chProgress[sk] || "none";
-            if (st !== "done") isCompleted = false;
-            if (st !== "none") isIncomplete = true;
-          });
-
-          const isOpen = openChapterId === ch.id;
+          const isOpen = openChapterId === `${currentSubData.id}:${ch.id}`;
 
           html += `
             <div class="chapter-row ${inExam ? "" : "out-of-syllabus"}">
@@ -504,7 +525,7 @@
                               data-subject-id="${currentSubData.id}" 
                               data-chapter-id="${ch.id}" 
                               data-stage-key="${sk}" 
-                              title="${inExam ? label : "Chapter not in exam syllabus"}"></button>
+                              title="${inExam ? label : "Chapter not in exam syllabus"}" aria-label="${inExam ? label : "Chapter not in exam syllabus"}"></button>
                     `;
                   }).join("")}
                 </div>
@@ -521,7 +542,7 @@
                     return `
                       <div class="stage-button-item" ${inExam ? `data-action="cycle-stage-dot"` : `data-action="disabled-stage-dot"`} data-subject-id="${currentSubData.id}" data-chapter-id="${ch.id}" data-stage-key="${sk}">
                         <span class="stage-button-label">${escapeHtml(label)}</span>
-                        <button type="button" class="stage-dot ${inExam ? "" : "disabled"}" data-state="${stateVal}"></button>
+                        <button type="button" class="stage-dot ${inExam ? "" : "disabled"}" data-state="${stateVal}" aria-label="${inExam ? label : "Chapter not in exam syllabus"}"></button>
                       </div>
                     `;
                   }).join("")}
@@ -576,7 +597,7 @@
                       data-subject-id="${currentSubData.id}" 
                       data-chapter-id="${ch.id}" 
                       data-stage-key="${sk}" 
-                      title="Tap to update: ${escapeHtml(label)}"></button>
+                      title="Tap to update: ${escapeHtml(label)}" aria-label="${escapeHtml(label)} (current state: ${stateVal})"></button>
             </div>
           `;
         });
@@ -820,13 +841,13 @@
           <form id="onboardingFormStep1">
             <div class="form-group">
               <label for="obName">Student Name</label>
-              <input type="text" id="obName" class="form-input" placeholder="e.g. Aarav" required />
+              <input type="text" id="obName" class="form-input" placeholder="e.g. Aarav" value="${escapeHtml(onboardingDraft.name)}" required />
             </div>
             <div class="form-group">
               <label for="obGrade">Class / Grade</label>
               <select id="obGrade" class="form-input" required>
                 <option value="10">Class 10 (5 Stages)</option>
-                <option value="9">Class 9 (3 Stages)</option>
+                <option value="9" ${onboardingDraft.grade === 9 ? "selected" : ""}>Class 9 (3 Stages)</option>
               </select>
             </div>
             <button type="submit" class="btn btn-primary btn-block">Next: Set Datesheet →</button>
@@ -839,15 +860,15 @@
           <form id="onboardingFormStep2">
             <div class="form-group">
               <label for="obScienceDate">Science Exam Date</label>
-              <input type="date" id="obScienceDate" class="form-input" required />
+              <input type="date" id="obScienceDate" class="form-input" value="${(onboardingDraft.datesheet && onboardingDraft.datesheet.science) || ""}" required />
             </div>
             <div class="form-group">
               <label for="obMathsDate">Mathematics Exam Date</label>
-              <input type="date" id="obMathsDate" class="form-input" required />
+              <input type="date" id="obMathsDate" class="form-input" value="${(onboardingDraft.datesheet && onboardingDraft.datesheet.maths) || ""}" required />
             </div>
             <div class="form-group">
               <label for="obSstDate">Social Science Exam Date</label>
-              <input type="date" id="obSstDate" class="form-input" required />
+              <input type="date" id="obSstDate" class="form-input" value="${(onboardingDraft.datesheet && onboardingDraft.datesheet.sst) || ""}" required />
             </div>
             <div id="dateWarningMsg" style="color:var(--status-amber); font-size:var(--font-size-sm); margin-bottom:0.5rem; display:none;"></div>
             <button type="submit" class="btn btn-primary btn-block">Next: Select Exam Syllabus →</button>
@@ -942,7 +963,9 @@
         render();
       } else if (action === "toggle-chapter-panel") {
         const chId = targetAction.dataset.chapterId;
-        openChapterId = openChapterId === chId ? null : chId;
+        // Chapter ids repeat across subjects (ch1..ch14), so namespace the open-panel state
+        const panelKey = `${activeSubjectId || ""}:${chId}`;
+        openChapterId = openChapterId === panelKey ? null : panelKey;
         render();
       } else if (action === "cycle-stage-dot") {
         e.stopPropagation();
@@ -969,6 +992,30 @@
         const pname = targetAction.dataset.profileName;
         promptDeleteProfile(pid, pname);
       }
+    });
+
+    // Keyboard support: Enter/Space activate div-based controls (subject cards),
+    // Escape closes any open modal.
+    document.addEventListener("keydown", e => {
+      if (e.key === "Escape") {
+        const overlay = document.getElementById("modalOverlay");
+        if (overlay && overlay.classList.contains("open")) {
+          overlay.classList.remove("open");
+          // Don't leave keyboard focus stranded on the now-hidden modal
+          const activeEl = document.activeElement;
+          if (activeEl && overlay.contains(activeEl)) activeEl.blur();
+        }
+        return;
+      }
+
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const el = e.target;
+      if (!el || !el.hasAttribute || !el.hasAttribute("data-action")) return;
+      const tag = el.tagName;
+      if (tag === "BUTTON" || tag === "A" || tag === "INPUT" || tag === "SELECT" || tag === "TEXTAREA") return;
+
+      e.preventDefault();
+      el.click();
     });
   }
 
@@ -1093,7 +1140,23 @@
     }
 
     if (currentScreen === "onboarding") {
-      onboardingDraft = { name: "", grade: 10, datesheet: {}, examSyllabus: null };
+      // Draft lifecycle is managed in render(): reset on entry, preserved on re-render.
+      // Keep the draft in sync with typed input so re-renders (e.g. theme toggle)
+      // can restore the values from the bound attributes above.
+      const obNameInput = document.getElementById("obName");
+      if (obNameInput) {
+        obNameInput.addEventListener("input", () => { onboardingDraft.name = obNameInput.value; });
+      }
+      const obGradeSel = document.getElementById("obGrade");
+      if (obGradeSel) {
+        obGradeSel.addEventListener("change", () => { onboardingDraft.grade = Number(obGradeSel.value); });
+      }
+      [["obScienceDate", "science"], ["obMathsDate", "maths"], ["obSstDate", "sst"]].forEach(([id, key]) => {
+        const dateEl = document.getElementById(id);
+        if (dateEl) {
+          dateEl.addEventListener("input", () => { onboardingDraft.datesheet[key] = dateEl.value; });
+        }
+      });
 
       const obForm1 = document.getElementById("onboardingFormStep1");
       if (obForm1) {
@@ -1135,7 +1198,8 @@
           }
 
           onboardingDraft.datesheet = { science: scDate, maths: maDate, sst: ssDate };
-          onboardingDraft.examSyllabus = window.TrackerStorage.getDefaultExamSyllabus(onboardingDraft.grade);
+          // Preserve already-selected syllabus when re-walking the steps after a re-render
+          onboardingDraft.examSyllabus = onboardingDraft.examSyllabus || window.TrackerStorage.getDefaultExamSyllabus(onboardingDraft.grade);
 
           populateSyllabusChecklistStep(onboardingDraft);
 
@@ -1207,9 +1271,21 @@
 
     container.innerHTML = html;
     bindSyllabusChecklistEvents(container);
+
+    // Keep the draft in sync with live checkbox changes so re-renders
+    // (e.g. theme toggle) preserve the user's step-3 selections.
+    container.addEventListener("change", e => {
+      if (e.target && e.target.classList && e.target.classList.contains("syll-cb")) {
+        onboardingDraft.examSyllabus = readSyllabusChecklistFromDom();
+      }
+    });
   }
 
   function renderSyllabusChecklistHtml(dataset, selectedSyllabus, grade = 10) {
+    if (!dataset || dataset.length === 0) {
+      return `<p style="color:var(--status-red);">Chapter data could not be loaded. Reload the page or reinstall the app.</p>`;
+    }
+
     let html = `<div style="max-height:350px; overflow-y:auto; padding-right:0.5rem;">`;
 
     dataset.forEach(sub => {
@@ -1262,6 +1338,8 @@
         const cbs = container.querySelectorAll(`input.syll-cb[data-subject-id="${subId}"]`);
         cbs.forEach(cb => {
           cb.checked = (mode === "all");
+          // bubble a change so the onboarding checklist syncs the draft
+          cb.dispatchEvent(new Event("change", { bubbles: true }));
         });
       });
     });
@@ -1338,6 +1416,11 @@
     if (!listEl) return;
 
     const subjectsData = profile.grade === 9 ? window.CLASS_9 : window.CLASS_10;
+    if (!subjectsData || subjectsData.length === 0) {
+      listEl.innerHTML = `<p style="color:var(--text-secondary);">Chapter data could not be loaded, so finished-work marking is unavailable.</p>`;
+      return;
+    }
+
     let html = "";
 
     subjectsData.forEach(sub => {
@@ -1468,7 +1551,8 @@
     a.href = url;
     a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
+    // Defer revocation so the download isn't aborted mid-flight in some browsers
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 
     showCustomAlertModal("Backup Saved", `Progress saved to file: ${filename}`, () => render());
   }

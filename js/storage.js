@@ -12,12 +12,15 @@
 
   let isStorageBlocked = false;
 
-  function getTodayString() {
-    const d = new Date();
+  function toLocalDateStr(d) {
     const year = d.getFullYear();
     const month = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
+  }
+
+  function getTodayString() {
+    return toLocalDateStr(new Date());
   }
 
   function getScopedChapterId(subjectId, groupId, chapterId, grade = 10) {
@@ -260,9 +263,12 @@
     const last = profile.streak.lastActive;
     if (last === todayStr) return;
 
+    // Compute "yesterday" in the SAME local timezone as getTodayString().
+    // toISOString() is UTC, which can shift the date for UTC+ timezones
+    // (e.g. IST early-morning marks would incorrectly reset the streak).
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-    const yStr = yesterday.toISOString().split("T")[0];
+    const yStr = toLocalDateStr(yesterday);
 
     if (last === yStr) {
       profile.streak.count += 1;
@@ -337,7 +343,7 @@
       data.profiles.forEach(p => {
         if (p.progress) totalTrackedChapters += Object.keys(p.progress).length;
         if (currentState && currentState.profiles) {
-          const dup = currentState.profiles.find(cp => cp.name.toLowerCase() === (p.name || "").toLowerCase() && cp.grade === p.grade);
+          const dup = currentState.profiles.find(cp => String(cp.name || "").toLowerCase() === String(p.name || "").toLowerCase() && cp.grade === p.grade);
           if (dup) duplicates.push({ imported: p, existing: dup });
         }
       });
@@ -358,10 +364,11 @@
 
   function applyImportData(state, importedData, actionMap = {}) {
     importedData.profiles.forEach(impProf => {
+      if (!impProf.name) impProf.name = "Student";
       migrateProfile(impProf);
       const existingIdx = state.profiles.findIndex(p =>
         p.id === impProf.id ||
-        (p.name.toLowerCase() === impProf.name.toLowerCase() && p.grade === impProf.grade)
+        (String(p.name || "").toLowerCase() === String(impProf.name || "").toLowerCase() && p.grade === impProf.grade)
       );
       const action = actionMap[impProf.id] || actionMap[impProf.name] || "copy_new";
 
@@ -376,7 +383,9 @@
       }
     });
 
-    if (importedData.activeProfileId) {
+    // Only adopt the imported active profile if it actually exists after import
+    // (a duplicate imported as "copy_new" receives a brand-new id).
+    if (importedData.activeProfileId && state.profiles.some(p => p.id === importedData.activeProfileId)) {
       state.activeProfileId = importedData.activeProfileId;
     } else if (state.profiles.length > 0) {
       state.activeProfileId = state.profiles[0].id;
