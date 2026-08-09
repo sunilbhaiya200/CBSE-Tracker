@@ -45,6 +45,8 @@ Built by **Sunil Bhaiya**.
           └── pyq-ch1.pdf       # Sample PYQ PDF for Ch 1
 /manifest.json                  # PWA Web App Manifest
 /sw.js                          # Service Worker (App Shell Precaching)
+/tests/offline-check.js         # Automated "Go Offline" PWA check (Node, no deps)
+/start_offline_check.bat        # Windows launcher for the offline check
 /README.md                      # Documentation
 ```
 
@@ -114,3 +116,25 @@ To add, remove, or rename a chapter:
 5. Select the downloaded `.json` file.
 6. Review the summary confirmation dialog showing profile and chapter counts.
 7. Tap **OK** to restore all progress, streak history, datesheets, and syllabus selections onto the new phone.
+
+---
+
+## Automated Offline Check (QA)
+
+The service worker promises the app keeps working with no internet connection. `tests/offline-check.js` verifies this automatically — it is the same as opening DevTools ➔ **Network** ➔ **Go Offline** and reloading, but scripted:
+
+1. Starts a local static server and loads the app in a fresh headless Chrome profile.
+2. Waits for the service worker to activate, take control of the page, and finish precaching the app shell.
+3. Emulates an offline network **for both the page and the service worker contexts** (SW fetches happen in the worker context, so the page session alone would not block them).
+4. Proves offline is real: an uncached fetch must return the SW's 503 fallback, and the local server must log **zero** requests during the offline phase.
+5. Reloads the page offline and asserts the app shell still renders from cache.
+6. Navigates to a brand-new URL offline and asserts the SPA shell loads (exercises the `sw.js` offline-navigation fallback).
+7. Fails if any uncaught exception or console error appears.
+
+**Run it (Windows):** double-click `start_offline_check.bat`, or:
+
+```bash
+node tests/offline-check.js
+```
+
+Requires Node 22+ (built-in WebSocket) and Chrome or Edge. Optional: `node tests/offline-check.js --chrome "C:\path\to\chrome.exe"` or `CHROME_PATH=...`. Exits with code `0` when all checks pass, `1` when any fail — so it can be wired into CI.
