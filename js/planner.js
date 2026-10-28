@@ -162,16 +162,20 @@
   }
 
   /**
-   * Returns top 3 incomplete stages from the nearest active subject's examSyllabus
+   * Returns top 3 incomplete stages distributed across active subjects,
+   * giving higher weight (backlog focus) to subjects with lower completion percentages.
    */
   function getTodaysFocus(profile, subjectsData) {
-    const sortedPaces = getOrderedSubjectPaces(profile, subjectsData);
-    const focusItems = [];
+    const paces = getOrderedSubjectPaces(profile, subjectsData);
+    const activePaces = paces.filter(p => p.remainingStages > 0);
+    
+    if (activePaces.length === 0) return [];
+
     const stageKeys = getStageKeys(profile.grade);
+    let subjectPendingStages = {};
 
-    for (const pace of sortedPaces) {
-      if (pace.remainingStages === 0) continue;
-
+    activePaces.forEach(pace => {
+      let pendingList = [];
       for (const ch of pace.inSyllabusChapters) {
         const key = `${pace.subjectId}.${ch.id}`;
         const chProgress = profile.progress ? profile.progress[key] : null;
@@ -179,7 +183,7 @@
         for (const sk of stageKeys) {
           const state = chProgress ? chProgress[sk] || "none" : "none";
           if (state !== "done") {
-            focusItems.push({
+            pendingList.push({
               subjectId: pace.subjectId,
               subjectName: pace.subjectName,
               groupId: ch.groupId,
@@ -191,16 +195,81 @@
               stageLabel: window.getStageLabel(pace.subjectId, sk),
               currentState: state
             });
-
-            if (focusItems.length === 3) {
-              return focusItems;
-            }
           }
+        }
+      }
+      subjectPendingStages[pace.subjectId] = {
+        pace,
+        pendingList,
+        urgency: Math.max(1, 100 - pace.completionPercentage) // Higher urgency for lagging subjects
+      };
+    });
+
+    const totalSlots = 3;
+    let totalUrgency = activePaces.reduce((sum, p) => sum + subjectPendingStages[p.subjectId].urgency, 0);
+
+    let allocations = {};
+    let allocatedCount = 0;
+
+    activePaces.forEach(pace => {
+      const subObj = subjectPendingStages[pace.subjectId];
+      if (subObj.pendingList.length === 0) {
+        allocations[pace.subjectId] = 0;
+        return;
+      }
+      let rawShare = (subObj.urgency / totalUrgency) * totalSlots;
+      let count = Math.round(rawShare);
+      
+      if (count === 0 && subObj.pendingList.length > 0 && activePaces.length <= totalSlots) {
+        count = 1;
+      }
+      count = Math.min(count, subObj.pendingList.length);
+      allocations[pace.subjectId] = count;
+      allocatedCount += count;
+    });
+
+    // Balance slots if total count differs from 3 due to rounding
+    if (allocatedCount < totalSlots) {
+      let sortedByUrgency = [...activePaces].sort((a, b) => a.completionPercentage - b.completionPercentage);
+      for (let i = 0; i < sortedByUrgency.length && allocatedCount < totalSlots; i++) {
+        const pace = sortedByUrgency[i];
+        const subObj = subjectPendingStages[pace.subjectId];
+        if (allocations[pace.subjectId] < subObj.pendingList.length) {
+          allocations[pace.subjectId]++;
+          allocatedCount++;
+          if (allocatedCount < totalSlots && i === sortedByUrgency.length - 1) i = -1;
+        }
+      }
+    } else if (allocatedCount > totalSlots) {
+      let sortedByCompletion = [...activePaces].sort((a, b) => b.completionPercentage - a.completionPercentage);
+      for (let i = 0; i < sortedByCompletion.length && allocatedCount > totalSlots; i++) {
+        const pace = sortedByCompletion[i];
+        if (allocations[pace.subjectId] > 1) {
+          allocations[pace.subjectId]--;
+          allocatedCount--;
         }
       }
     }
 
-    return focusItems;
+    let focusItems = [];
+    activePaces.forEach(pace => {
+      const count = allocations[pace.subjectId] || 0;
+      const subObj = subjectPendingStages[pace.subjectId];
+      for (let i = 0; i < count && i < subObj.pendingList.length; i++) {
+        focusItems.push(subObj.pendingList[i]);
+      }
+    });
+
+    if (focusItems.length === 0) {
+      for (const pace of activePaces) {
+        for (const item of subjectPendingStages[pace.subjectId].pendingList) {
+          focusItems.push(item);
+          if (focusItems.length === 3) return focusItems;
+        }
+      }
+    }
+
+    return focusItems.slice(0, 3);
   }
 
   if (typeof window !== "undefined") {
