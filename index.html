@@ -1,35 +1,228 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Sunil Bhaiya — CBSE Study Tracker</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class 9 CBSE Tracker</title>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --success: #22c55e;
+        }
 
-  <!-- PWA & Mobile Meta -->
-  <meta name="description" content="Offline-first CBSE Class 9 & 10 Study Tracker for Science, Maths, and Social Science by Sunil Bhaiya" />
-  <meta name="theme-color" content="#0f172a" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+        }
 
-  <link rel="icon" type="image/svg+xml" href="assets/icons/logo.svg" />
-  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
-  <link rel="stylesheet" href="css/styles.css" />
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 1.75rem;
+            margin-bottom: 8px;
+            color: var(--primary);
+        }
+
+        p.subtitle {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            margin: 0;
+        }
+
+        .progress-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .progress-bar-container {
+            background-color: var(--border);
+            border-radius: 9999px;
+            height: 12px;
+            width: 100%;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+
+        .progress-bar {
+            background-color: var(--success);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-muted);
+        }
+
+        .subject-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            margin-top: 0;
+            margin-bottom: 12px;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 8px;
+            color: var(--primary);
+        }
+
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        li {
+            display: flex;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        li:last-child {
+            border-bottom: none;
+        }
+
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+            margin-right: 12px;
+            cursor: pointer;
+        }
+
+        label {
+            cursor: pointer;
+            font-size: 0.95rem;
+            flex-grow: 1;
+        }
+
+        label.completed {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+    </style>
 </head>
 <body>
 
-  <!-- Single Page Application Mounting Point -->
-  <div id="app"></div>
+<div class="container">
+    <header>
+        <h1>Class 9 Syllabus Tracker</h1>
+        <p class="subtitle">New NCERT Curriculum Tracker</p>
+    </header>
 
-  <!-- Data Files -->
-  <script src="js/data/stages.js"></script>
-  <script src="js/data/chapters-class9.js"></script>
-  <script src="js/data/chapters-class10.js"></script>
+    <div class="progress-card">
+        <div class="progress-text">
+            <span>Overall Progress</span>
+            <span id="progress-percentage">0%</span>
+        </div>
+        <div class="progress-bar-container">
+            <div id="progress-bar" class="progress-bar"></div>
+        </div>
+    </div>
 
-  <!-- Core Modules -->
-  <script src="js/storage.js"></script>
-  <script src="js/planner.js"></script>
-  <script src="js/insights.js"></script>
-  <script src="js/app.js"></script>
+    <div id="tracker-container"></div>
+</div>
 
-</body>
-</html>
+<script>
+    const syllabusData = [
+        {
+            subject: "Social Science: Understanding Society (Part 2)",
+            chapters: [
+                "Chapter 1: Oceans and Life",
+                "Chapter 2: Earth Systems and Geography Continuation",
+                "Chapter 3: Resistance and Resilience (1000–1700 CE)",
+                "Chapter 4: Governance and Public Policy",
+                "Chapter 5: Democratic Politics & Social Institutions",
+                "Chapter 6: From Ideas to Startups"
+            ]
+        },
+        {
+            subject: "Mathematics: Ganita Manjari (Part 2)",
+            chapters: [
+                "Chapter 9: Propositions and their Converses",
+                "Chapter 10: How Quantities Combine: Understanding Data",
+                "Chapter 11: The World of Algorithms",
+                "Chapter 12: Quadrilaterals",
+                "Chapter 13: Two Variables, One Line",
+                "Chapter 14: Math of Space: Surface Area and Volume"
+            ]
+        },
+        {
+            subject: "English: Kaveri (New NCERT)",
+            chapters: [
+                "Chapter 1: How I Taught My Grandmother to Read",
+                "Chapter 2: The Pot Maker",
+                "Chapter 3: Winds of Change",
+                "Chapter 4: Vitamin-M",
+                "Chapter 5: The World of Limitless Possibilities",
+                "Chapter 6: Twin Melodies",
+                "Chapter 7: Carrier of Words",
+                "Chapter 8: Follow That Dream"
+            ]
+        },
+        {
+            subject: "Hindi: Ganga (New NCERT)",
+            chapters: [
+                "Chapter 1: Do Bailon Ki Katha",
+                "Chapter 2: Kya Likhoon?",
+                "Chapter 3: Samvadheen",
+                "Chapter 4: Aisi Bhi Baatein Hoti Hain (Lata Mangeshkar)",
+                "Chapter 5: Aakhiri Chattan Tak",
+                "Chapter 6: Reedh Ki Haddi",
+                "Chapter 7: Main Aur Mera Desh"
+            ]
+        }
+    ];
+
+    const container = document.getElementById('tracker-container');
+    const progressBar = document.getElementById('progress-bar');
+    const progressPercentage = document.getElementById('progress-percentage');
+
+    function renderApp() {
+        container.innerHTML = '';
+        let totalChapters = 0;
+        let completedChapters = 0;
+
+        syllabusData.forEach((subj, subjIndex) => {
+            const card = document.createElement('div');
+            card.className = 'subject-card';
+            
+            const title = document.createElement('h2');
+            title.textContent = subj.subject;
+            card.appendChild(title);
+
+            const ul
